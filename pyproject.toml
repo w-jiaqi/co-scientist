@@ -1,0 +1,61 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools>=64.0.0", "setuptools-scm>=8"]
+
+[project]
+name = 'genbio_leaderboard'
+description = 'Temporary description'
+readme = 'README.md'
+requires-python = '>= 3.11'
+authors = [{ name = 'Caleb Ellington' }]
+maintainers = [{ name = 'Caleb Ellington' }]
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Science/Research',
+    'Natural Language :: English',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
+    'Typing :: Typed',
+]
+
+dynamic = ['version']
+
+dependencies = [
+    'anndata',
+    'pandas',
+    'torch',
+    'numpy',
+    'cloudpathlib[gs]',
+    'datasets',
+    'torchmetrics',
+    'scanpy',
+    'flask',
+    'ipykernel',
+    'appdirs>=1.4.4',
+    "py7zr>0.20.0",
+    "polaris-lib>=0.8.6",
+    "zarr<3",
+]
+
+[project.optional-dependencies]
+pipelines = [
+    "kfp[kubernetes]",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"genbio.datasets" = [
+    "**/*.py",
+    "**/*.csv",
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.md"
+]
+
+[project.scripts]
+genbio-leaderboard = "genbio.leaderboard.reporting:cli"
