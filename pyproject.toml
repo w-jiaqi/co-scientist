@@ -38,11 +38,25 @@ dependencies = [
     "py7zr>0.20.0",
     "polaris-lib>=0.8.6",
     "zarr<3",
+    'typer[all]>=0.9.0',
+    'rich>=13.0',
+    'jinja2>=3.1',
+    'optuna>=3.0',
+    'scikit-learn>=1.3',
+    'joblib>=1.3',
+    'matplotlib>=3.7',
+    'seaborn>=0.12',
+    'pyyaml>=6.0',
+    'scipy',
 ]
 
 [project.optional-dependencies]
 pipelines = [
     "kfp[kubernetes]",
+]
+llm = [
+    "anthropic>=0.20",
+    "openai>=1.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -56,6 +70,10 @@ where = ["src"]
     "**/*.yml",
     "**/*.md"
 ]
+"genbio.coscientist" = [
+    "templates/**/*",
+]
 
 [project.scripts]
 genbio-leaderboard = "genbio.leaderboard.reporting:cli"
+cosci = "genbio.coscientist.cli:app"
