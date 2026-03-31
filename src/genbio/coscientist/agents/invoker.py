@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
+import os
 import pickle
 import shutil
 import subprocess
-import time
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +39,7 @@ def select_agent(preference: str = "auto") -> str | None:
 
 
 class AgentInvoker:
-    """Orchestrates the agent workflow: scaffold → invoke → validate."""
+    """Orchestrates the agent workflow: scaffold -> invoke -> validate."""
 
     def __init__(
         self,
@@ -78,51 +78,65 @@ class AgentInvoker:
         return self._validate_results(ws, test_data)
 
     def _invoke_agent(self, agent: str, workspace: Path) -> bool:
-        """Invoke the agent CLI."""
-        instructions = (workspace / "INSTRUCTIONS.md").read_text()
+        """Invoke the agent CLI.
+
+        Uses os.system() to run through the user's login shell, which ensures
+        the correct PATH (NVM, etc.), full network access, and proper TTY
+        handling that claude/codex require.
+
+        In interactive mode: the agent prompts the user for command approvals,
+        so you can review/reject/edit each step. In auto mode: all commands
+        are auto-approved for fully hands-off operation.
+        """
+        interactive = self.config.mode == "interactive"
+        timeout = self._get_timeout()
 
         if agent == "claude":
-            cmd = [
-                "claude", "-p", instructions,
-                "--allowedTools", "Read,Edit,Write,Bash",
-                "--output-format", "text",
-            ]
+            if interactive:
+                shell_cmd = (
+                    f'cd "{workspace}" && '
+                    f'claude "$(cat INSTRUCTIONS.md)" '
+                )
+            else:
+                shell_cmd = (
+                    f'cd "{workspace}" && '
+                    f'claude -p "$(cat INSTRUCTIONS.md)" '
+                    f'--allowedTools "Bash,Read,Edit,Write" '
+                    f'2>&1 | tee agent_log.txt'
+                )
         elif agent == "codex":
-            cmd = [
-                "codex", "--full-auto",
-                "-C", str(workspace),
-                instructions,
-            ]
+            if interactive:
+                shell_cmd = (
+                    f'cd "{workspace}" && '
+                    f'codex '
+                    f'"$(cat INSTRUCTIONS.md)" '
+                )
+            else:
+                shell_cmd = (
+                    f'cd "{workspace}" && '
+                    f'codex --ask-for-approval never '
+                    f'--no-alt-screen '
+                    f'"$(cat INSTRUCTIONS.md)" '
+                    f'2>&1 | tee agent_log.txt'
+                )
         else:
             ui.error(f"Unknown agent: {agent}")
             return False
 
-        ui.info(f"Invoking {agent}...")
-        log_path = workspace / "agent_log.txt"
+        mode_label = "interactive (you control approvals)" if interactive else "autonomous"
+        ui.info(f"Invoking {agent} in {mode_label} mode...")
+        ui.console.print("[dim]" + "─" * 60 + "[/dim]")
 
-        try:
-            timeout = self._get_timeout()
-            with open(log_path, "w") as log_file:
-                result = subprocess.run(
-                    cmd,
-                    cwd=str(workspace),
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    timeout=timeout,
-                    text=True,
-                )
-            if result.returncode == 0:
-                ui.success("Agent finished successfully.")
-                return True
-            else:
-                ui.warning(f"Agent exited with code {result.returncode}. Check {log_path}")
-                return True  # still try to validate
-        except subprocess.TimeoutExpired:
-            ui.warning(f"Agent timed out after {timeout}s. Checking partial results.")
-            return True
-        except FileNotFoundError:
-            ui.error(f"Agent binary '{agent}' not found in PATH.")
-            return False
+        rc = os.system(shell_cmd)
+
+        ui.console.print("[dim]" + "─" * 60 + "[/dim]")
+
+        if rc == 0:
+            ui.success("Agent finished successfully.")
+        else:
+            ui.warning(f"Agent exited with code {rc}.")
+
+        return True
 
     def _validate_results(self, workspace: Path, test_data: Any) -> dict | None:
         """Validate and collect agent outputs."""
@@ -151,3 +165,28 @@ class AgentInvoker:
             BudgetTier.STANDARD: 600,
             BudgetTier.THOROUGH: 1200,
         }.get(self.config.budget, 600)
+
+
+def test_agent_connection(agent: str = "auto") -> bool:
+    """Quick test: can we invoke the agent and get a response?
+    
+    Run from your terminal: python -c "from genbio.coscientist.agents.invoker import test_agent_connection; test_agent_connection()"
+    """
+    selected = select_agent(agent)
+    if selected is None:
+        print("No agent found. Install claude or codex CLI.")
+        return False
+
+    print(f"Testing {selected}...")
+
+    if selected == "claude":
+        rc = os.system('claude -p "Reply with OK"')
+    elif selected == "codex":
+        rc = os.system('codex --ask-for-approval never --no-alt-screen "Reply with OK"')
+    else:
+        print(f"Unknown agent: {selected}")
+        return False
+
+    ok = rc == 0
+    print(f"\nResult: {'PASS' if ok else 'FAIL'} (exit code {rc})")
+    return ok

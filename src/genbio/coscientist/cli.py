@@ -114,5 +114,29 @@ def report(
     ui.success(f"Report generated at {path}")
 
 
+@app.command()
+def test_agent(
+    agent: str = typer.Option("auto", "--agent", help="Agent to test: claude, codex, or auto"),
+) -> None:
+    """Quick test to verify an AI coding agent can be invoked."""
+    ui.header("Agent Test")
+
+    from genbio.coscientist.agents.invoker import detect_agents, test_agent_connection
+
+    available = detect_agents()
+    if not available:
+        ui.error("No agents found. Install Claude Code (`claude`) or Codex (`codex`).")
+        raise typer.Exit(1)
+
+    ui.info(f"Detected agents: {', '.join(available)}")
+
+    ok = test_agent_connection(agent)
+    if ok:
+        ui.success("Agent is working. You can use --strategy agentic or --strategy hybrid.")
+    else:
+        ui.error("Agent test failed. Check your CLI installation and authentication.")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
